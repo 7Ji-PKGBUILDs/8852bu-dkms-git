@@ -18,8 +18,7 @@ sha256sums=('SKIP'
             '2f9968b88d3f434fd67ffa00387fb7eaf0f04e2f9d04e6c5e22f39d359a53c4a'
             '32944034b3eca0dc442d9561e349b24b70b34bba6fd91788c94e1aaa1dca8a65')
 depends=('dkms' 'python' 'bc')
-_headers=('linux-aarch64-rockchip-bsp5.10-radxa-git-headers')
-mekdepends=$_headers
+makedepends=('linux-aarch64-rockchip-bsp5.10-radxa-git-headers')
 
 
 _switchtag(){
@@ -51,7 +50,7 @@ check(){
   cd $_srcname
   _tag=$(_switchtag)
 
-  for _kernel in ${_headers[@]}; do
+  for _kernel in ${makedepends[@]}; do
     mkdir -p $srcdir/test_dkms
     rm -rf $srcdir/test_dkms/*
   
