@@ -1,53 +1,79 @@
 # Maintainer: boogiepop <boogiepop@gmx.com>
 
-_pkgbase=8852bu
-pkgname=$_pkgbase-dkms-git
-pkgver=1.15.7.112.2
+_pkgname=8852bu
+_srcname=$_pkgname-dkms
+pkgname=$_pkgname-dkms-git
+pkgver=1.15.7.1123
 pkgrel=1
-pkgdesc="Kernel modules and firmware for RealTek RTL8852bu"
+pkgdesc="Kernel 5.10 modules and firmware for RealTek RTL8852bu"
 arch=('any')
-url="https://github.com/radxa-pkg/${_pkgbase}-dkms.git"
+url="https://github.com/radxa-pkg/${_srcname}.git"
 license=('GPL')
-provides=(${pkgname}=${pkgver} ${_pkgbase}-dkms=${pkgver})
+provides=(${pkgname}=${pkgver} ${_pkgname}-dkms=${pkgver})
 source=(git+$url dkms.conf
         'https://github.com/radxa-pkg/radxa-firmware/raw/main/firmware/rtl8852bu_config'
         'https://github.com/radxa-pkg/radxa-firmware/raw/main/firmware/rtl8852bu_fw')
 sha256sums=('SKIP'
-            'cf94de86cb9e66fc1c60ec4d91895909d859caaa130c686e7376c0b5ef12bd78'
+            'SKIP'
             '2f9968b88d3f434fd67ffa00387fb7eaf0f04e2f9d04e6c5e22f39d359a53c4a'
             '32944034b3eca0dc442d9561e349b24b70b34bba6fd91788c94e1aaa1dca8a65')
 depends=('dkms' 'python' 'bc')
+_headers=('linux-aarch64-rockchip-bsp5.10-radxa-git-headers')
+mekdepends=$_headers
 
-prepare() {
-    cd ${srcdir}/$_pkgbase-dkms
-	for patch in $(cat debian/patches/series)
-	do
-	patch -p1 -i debian/patches/$patch
-	done
+
+_switchtag(){
+  _tag=$(git tag -l --sort=creatordate | tail -1)
+  git checkout $_tag --quiet
+  git reset --hard --quiet
+  printf $_tag
 }
 
 pkgver() {
-	cd ${srcdir}/$_pkgbase-dkms
-	_version=$(git tag -l --sort -version:refname | head -n 1)
-	printf ${_version//[-]/\.}
+  cd $_srcname
+  _tag=$(_switchtag)
+  printf $(echo $_tag | grep -o "[0-9.]*" | tr -d "\n")
+}
+
+build(){
+  cd $_srcname
+  _tag=$(_switchtag)
+
+  cp $srcdir/dkms.conf _dkms.conf
+  # Set name and version
+  sed -e "s/@PKGNAME@/${_pkgname}/" \
+      -e "s/@PKGVER@/${pkgver}/" \
+      -i _dkms.conf
+  ln -sf $(pwd)/src $srcdir/$_pkgname-$pkgver
+}
+
+check(){
+  cd $_srcname
+  _tag=$(_switchtag)
+
+  for _kernel in ${_headers[@]}; do
+    mkdir -p $srcdir/test_dkms
+    rm -rf $srcdir/test_dkms/*
+  
+    echo "Test Building for $_kernel"
+    _kernel_dir=$(pacman -Ql $_kernel | grep -o "/usr/lib/modules/.*/build" | head -1)
+    _kernel_ver=$(basename $(pacman -Ql $_kernel | grep -o "/usr/lib/modules/.*/" | head -1))
+    dkms build -c _dkms.conf --kernelsourcedir $_kernel_dir --dkmstree=$srcdir/test_dkms --sourcetree=$srcdir -k $_kernel_ver $_pkgname/$pkgver
+  done
 }
 
 package() {
-    # Copy dkms.conf
-    install -Dm644 dkms.conf "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/dkms.conf
+  cd $_srcname
 
-    # Set name and version
-    sed -e "s/@_PKGBASE@/${_pkgbase}/" \
-        -e "s/@PKGVER@/${pkgver}/" \
-        -i "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/dkms.conf
-
-  # Copy sources (including Makefile)
-  cp -r ${_pkgbase}-dkms/src/* "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/
+  # Copy dkms.conf
+  install -Dm644 _dkms.conf "${pkgdir}"/usr/src/${_pkgname}-${pkgver}/dkms.conf
   
-  install -d "${pkgdir}/usr/lib/firmware"
-  install -Dm755 rtl8852bu_config "$pkgdir/usr/lib/firmware/"
-  install -Dm755 rtl8852bu_fw "$pkgdir/usr/lib/firmware/"
+  _tag=$(_switchtag)
+  # Copy sources (including Makefile)
+  cp -r src/* "${pkgdir}"/usr/src/${_pkgname}-${pkgver}/
 
-  # Blacklists conflicting module
-  # install -Dm644 ${pkgname}.conf "${srcdir}/usr/lib/modprobe.d/${pkgname}.conf"
+  install -d "${pkgdir}/usr/lib/firmware"
+  install -Dm755 ../rtl8852bu_config "$pkgdir/usr/lib/firmware/"
+  install -Dm755 ../rtl8852bu_fw "$pkgdir/usr/lib/firmware/"
+
 }
